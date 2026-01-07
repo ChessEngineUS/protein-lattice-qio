@@ -1,2 +1,228 @@
 #!/usr/bin/env python3
-"""\nAutomated benchmarking script for protein lattice folding.\n\nMeasures:\n- Wall-clock time for optimization algorithms\n- Peak memory usage (if possible)\n- Solution quality (final energy)\n- Device detection (GPU vs CPU)\n\nOutputs:\n- outputs/benchmark_results.json\n- outputs/benchmark_plot.png\n\nUsage:\n    python scripts/benchmark.py\n"""\n\nimport os\nimport sys\nimport time\nimport json\nimport logging\nfrom pathlib import Path\nimport psutil\n\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nsys.path.insert(0, str(Path(__file__).parent.parent / "src"))\n\nfrom lattice import SquareLattice2D\nfrom energy import HPEnergyFunction\nfrom optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer\nfrom utils import set_seed, detect_device, generate_hp_sequence\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n\ndef get_memory_usage() -> float:\n    """Get current memory usage in MB."""\n    process = psutil.Process()\n    return process.memory_info().rss / 1024 / 1024\n\n\ndef benchmark_optimizer(optimizer, sequence: str, lattice, energy_fn, name: str) -> dict:\n    """\n    Benchmark a single optimizer.\n    \n    Returns dict with timing, memory, and quality metrics.\n    """\n    logger.info(f"Benchmarking {name}...")\n    \n    # Measure initial memory\n    mem_before = get_memory_usage()\n    \n    # Run optimization\n    start_time = time.time()\n    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)\n    elapsed_time = time.time() - start_time\n    \n    # Measure final memory\n    mem_after = get_memory_usage()\n    mem_used = mem_after - mem_before\n    \n    results = {\n        "algorithm": name,\n        "sequence_length": len(sequence),\n        "final_energy": float(energy),\n        "elapsed_time_seconds": elapsed_time,\n        "memory_used_mb": mem_used,\n        "optimization_steps": len(trajectory),\n        "convergence_step": _find_convergence_step(trajectory)\n    }\n    \n    logger.info(f"{name} completed in {elapsed_time:.2f}s with energy {energy:.4f}")\n    \n    return results\n\n\ndef _find_convergence_step(trajectory: list) -> int:\n    """Find step where energy stops improving significantly."""\n    if len(trajectory) < 10:\n        return len(trajectory)\n    \n    # Find where improvement rate drops below threshold\n    threshold = 0.001\n    for i in range(10, len(trajectory)):\n        recent_improvement = abs(trajectory[i] - trajectory[i-10]) / 10\n        if recent_improvement < threshold:\n            return i\n    \n    return len(trajectory)\n\n\ndef main():\n    """Run comprehensive benchmarks."""\n    output_dir = Path("outputs")\n    output_dir.mkdir(exist_ok=True)\n    \n    # Set seed for reproducibility\n    set_seed(42)\n    \n    # Detect device\n    device = detect_device()\n    \n    # Generate test sequences of varying lengths\n    test_sequences = [\n        generate_hp_sequence(15, h_ratio=0.5),\n        generate_hp_sequence(20, h_ratio=0.55),\n        generate_hp_sequence(25, h_ratio=0.6),\n    ]\n    \n    logger.info(f"Testing on {len(test_sequences)} sequences")\n    \n    # Initialize lattice and energy function\n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    \n    # Run benchmarks\n    all_results = []\n    \n    for seq_idx, sequence in enumerate(test_sequences):\n        logger.info(f"\\n=== Testing sequence {seq_idx + 1}/{len(test_sequences)} (length={len(sequence)}) ===")\n        \n        optimizers = [\n            (GreedyOptimizer(device=device), "Greedy"),\n            (SimulatedAnnealingOptimizer(\n                initial_temp=10.0, \n                final_temp=0.1, \n                steps=1000,  # Reduced for benchmarking\n                device=device\n            ), "Simulated Annealing"),\n            (QuantumInspiredOptimizer(\n                initial_temp=10.0,\n                final_temp=0.1,\n                steps=1000,  # Reduced for benchmarking\n                tunnel_rate=0.1,\n                device=device\n            ), "Quantum-Inspired"),\n        ]\n        \n        for optimizer, name in optimizers:\n            result = benchmark_optimizer(optimizer, sequence, lattice, energy_fn, name)\n            result["sequence_index"] = seq_idx\n            result["sequence"] = sequence\n            all_results.append(result)\n    \n    # Save results\n    benchmark_data = {\n        "device": device,\n        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),\n        "results": all_results\n    }\n    \n    results_path = output_dir / "benchmark_results.json"\n    with open(results_path, 'w') as f:\n        json.dump(benchmark_data, f, indent=2)\n    \n    logger.info(f"Results saved to {results_path}")\n    \n    # Generate comparison plot\n    fig, axes = plt.subplots(2, 2, figsize=(14, 10))\n    \n    # Extract data by algorithm\n    algorithms = ["Greedy", "Simulated Annealing", "Quantum-Inspired"]\n    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']\n    \n    # Plot 1: Runtime vs sequence length\n    ax = axes[0, 0]\n    for alg, color in zip(algorithms, colors):\n        alg_data = [r for r in all_results if r["algorithm"] == alg]\n        lengths = [r["sequence_length"] for r in alg_data]\n        times = [r["elapsed_time_seconds"] for r in alg_data]\n        ax.plot(lengths, times, 'o-', label=alg, color=color, linewidth=2, markersize=8)\n    ax.set_xlabel("Sequence Length", fontsize=11)\n    ax.set_ylabel("Runtime (seconds)", fontsize=11)\n    ax.set_title("Runtime vs Sequence Length", fontsize=12, fontweight='bold')\n    ax.legend()\n    ax.grid(True, alpha=0.3)\n    \n    # Plot 2: Final energy comparison\n    ax = axes[0, 1]\n    for seq_idx in range(len(test_sequences)):\n        seq_data = [r for r in all_results if r["sequence_index"] == seq_idx]\n        energies = [r["final_energy"] for r in seq_data]\n        x_pos = np.arange(len(algorithms)) + seq_idx * 0.25\n        ax.bar(x_pos, energies, width=0.25, \n               label=f"Seq {seq_idx+1} (L={seq_data[0]['sequence_length']})")\n    ax.set_xticks(np.arange(len(algorithms)) + 0.25)\n    ax.set_xticklabels(algorithms)\n    ax.set_ylabel("Final Energy", fontsize=11)\n    ax.set_title("Solution Quality Comparison", fontsize=12, fontweight='bold')\n    ax.legend(fontsize=9)\n    ax.grid(True, alpha=0.3, axis='y')\n    \n    # Plot 3: Memory usage\n    ax = axes[1, 0]\n    for alg, color in zip(algorithms, colors):\n        alg_data = [r for r in all_results if r["algorithm"] == alg]\n        lengths = [r["sequence_length"] for r in alg_data]\n        memory = [r["memory_used_mb"] for r in alg_data]\n        ax.plot(lengths, memory, 'o-', label=alg, color=color, linewidth=2, markersize=8)\n    ax.set_xlabel("Sequence Length", fontsize=11)\n    ax.set_ylabel("Memory Used (MB)", fontsize=11)\n    ax.set_title("Memory Usage vs Sequence Length", fontsize=12, fontweight='bold')\n    ax.legend()\n    ax.grid(True, alpha=0.3)\n    \n    # Plot 4: Convergence speed\n    ax = axes[1, 1]\n    for alg, color in zip(algorithms, colors):\n        alg_data = [r for r in all_results if r["algorithm"] == alg]\n        lengths = [r["sequence_length"] for r in alg_data]\n        conv_steps = [r["convergence_step"] for r in alg_data]\n        ax.plot(lengths, conv_steps, 'o-', label=alg, color=color, linewidth=2, markersize=8)\n    ax.set_xlabel("Sequence Length", fontsize=11)\n    ax.set_ylabel("Steps to Convergence", fontsize=11)\n    ax.set_title("Convergence Speed", fontsize=12, fontweight='bold')\n    ax.legend()\n    ax.grid(True, alpha=0.3)\n    \n    plt.tight_layout()\n    plot_path = output_dir / "benchmark_plot.png"\n    plt.savefig(plot_path, dpi=150)\n    logger.info(f"Benchmark plot saved to {plot_path}")\n    \n    # Print summary\n    logger.info("\\n=== BENCHMARK SUMMARY ===")\n    logger.info(f"Device: {device}")\n    for alg in algorithms:\n        alg_data = [r for r in all_results if r["algorithm"] == alg]\n        avg_time = np.mean([r["elapsed_time_seconds"] for r in alg_data])\n        avg_energy = np.mean([r["final_energy"] for r in alg_data])\n        logger.info(f"{alg}: avg_time={avg_time:.2f}s, avg_energy={avg_energy:.4f}")\n    \n    return 0\n\n\nif __name__ == "__main__":\n    sys.exit(main())\n
+"""Automated benchmarking script for protein lattice folding.
+
+Measures:
+- Wall-clock time for optimization algorithms
+- Peak memory usage
+- Solution quality (final energy)
+- Device detection (GPU vs CPU)
+
+Outputs:
+- outputs/benchmark_results.json
+- outputs/benchmark_plot.png
+
+Usage:
+    python scripts/benchmark.py
+"""
+
+import os
+import sys
+import time
+import json
+import logging
+from pathlib import Path
+import psutil
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from lattice import SquareLattice2D
+from energy import HPEnergyFunction
+from optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer
+from utils import set_seed, detect_device, generate_hp_sequence
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def get_memory_usage() -> float:
+    """Get current memory usage in MB."""
+    process = psutil.Process()
+    return process.memory_info().rss / 1024 / 1024
+
+
+def benchmark_optimizer(optimizer, sequence: str, lattice, energy_fn, name: str) -> dict:
+    """Benchmark a single optimizer.
+    
+    Returns dict with timing, memory, and quality metrics.
+    """
+    logger.info(f"Benchmarking {name}...")
+    
+    mem_before = get_memory_usage()
+    
+    start_time = time.time()
+    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)
+    elapsed_time = time.time() - start_time
+    
+    mem_after = get_memory_usage()
+    mem_used = mem_after - mem_before
+    
+    results = {
+        "algorithm": name,
+        "sequence_length": len(sequence),
+        "final_energy": float(energy),
+        "elapsed_time_seconds": elapsed_time,
+        "memory_used_mb": mem_used,
+        "optimization_steps": len(trajectory),
+        "convergence_step": _find_convergence_step(trajectory)
+    }
+    
+    logger.info(f"{name} completed in {elapsed_time:.2f}s with energy {energy:.4f}")
+    
+    return results
+
+
+def _find_convergence_step(trajectory: list) -> int:
+    """Find step where energy stops improving significantly."""
+    if len(trajectory) < 10:
+        return len(trajectory)
+    
+    threshold = 0.001
+    for i in range(10, len(trajectory)):
+        recent_improvement = abs(trajectory[i] - trajectory[i-10]) / 10
+        if recent_improvement < threshold:
+            return i
+    
+    return len(trajectory)
+
+
+def main():
+    """Run comprehensive benchmarks."""
+    output_dir = Path("outputs")
+    output_dir.mkdir(exist_ok=True)
+    
+    set_seed(42)
+    
+    device = detect_device()
+    
+    test_sequences = [
+        generate_hp_sequence(15, h_ratio=0.5),
+        generate_hp_sequence(20, h_ratio=0.55),
+        generate_hp_sequence(25, h_ratio=0.6),
+    ]
+    
+    logger.info(f"Testing on {len(test_sequences)} sequences")
+    
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    
+    all_results = []
+    
+    for seq_idx, sequence in enumerate(test_sequences):
+        logger.info(f"\n=== Testing sequence {seq_idx + 1}/{len(test_sequences)} (length={len(sequence)}) ===")
+        
+        optimizers = [
+            (GreedyOptimizer(device=device), "Greedy"),
+            (SimulatedAnnealingOptimizer(
+                initial_temp=10.0, 
+                final_temp=0.1, 
+                steps=1000,
+                device=device
+            ), "Simulated Annealing"),
+            (QuantumInspiredOptimizer(
+                initial_temp=10.0,
+                final_temp=0.1,
+                steps=1000,
+                tunnel_rate=0.1,
+                device=device
+            ), "Quantum-Inspired"),
+        ]
+        
+        for optimizer, name in optimizers:
+            result = benchmark_optimizer(optimizer, sequence, lattice, energy_fn, name)
+            result["sequence_index"] = seq_idx
+            result["sequence"] = sequence
+            all_results.append(result)
+    
+    benchmark_data = {
+        "device": device,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "results": all_results
+    }
+    
+    results_path = output_dir / "benchmark_results.json"
+    with open(results_path, 'w') as f:
+        json.dump(benchmark_data, f, indent=2)
+    
+    logger.info(f"Results saved to {results_path}")
+    
+    # Generate comparison plot
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    algorithms = ["Greedy", "Simulated Annealing", "Quantum-Inspired"]
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+    
+    # Plot 1: Runtime vs sequence length
+    ax = axes[0, 0]
+    for alg, color in zip(algorithms, colors):
+        alg_data = [r for r in all_results if r["algorithm"] == alg]
+        lengths = [r["sequence_length"] for r in alg_data]
+        times = [r["elapsed_time_seconds"] for r in alg_data]
+        ax.plot(lengths, times, 'o-', label=alg, color=color, linewidth=2, markersize=8)
+    ax.set_xlabel("Sequence Length", fontsize=11)
+    ax.set_ylabel("Runtime (seconds)", fontsize=11)
+    ax.set_title("Runtime vs Sequence Length", fontsize=12, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Final energy comparison
+    ax = axes[0, 1]
+    for seq_idx in range(len(test_sequences)):
+        seq_data = [r for r in all_results if r["sequence_index"] == seq_idx]
+        energies = [r["final_energy"] for r in seq_data]
+        x_pos = np.arange(len(algorithms)) + seq_idx * 0.25
+        ax.bar(x_pos, energies, width=0.25, 
+               label=f"Seq {seq_idx+1} (L={seq_data[0]['sequence_length']})")
+    ax.set_xticks(np.arange(len(algorithms)) + 0.25)
+    ax.set_xticklabels(algorithms)
+    ax.set_ylabel("Final Energy", fontsize=11)
+    ax.set_title("Solution Quality Comparison", fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # Plot 3: Memory usage
+    ax = axes[1, 0]
+    for alg, color in zip(algorithms, colors):
+        alg_data = [r for r in all_results if r["algorithm"] == alg]
+        lengths = [r["sequence_length"] for r in alg_data]
+        memory = [r["memory_used_mb"] for r in alg_data]
+        ax.plot(lengths, memory, 'o-', label=alg, color=color, linewidth=2, markersize=8)
+    ax.set_xlabel("Sequence Length", fontsize=11)
+    ax.set_ylabel("Memory Used (MB)", fontsize=11)
+    ax.set_title("Memory Usage vs Sequence Length", fontsize=12, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 4: Convergence speed
+    ax = axes[1, 1]
+    for alg, color in zip(algorithms, colors):
+        alg_data = [r for r in all_results if r["algorithm"] == alg]
+        lengths = [r["sequence_length"] for r in alg_data]
+        conv_steps = [r["convergence_step"] for r in alg_data]
+        ax.plot(lengths, conv_steps, 'o-', label=alg, color=color, linewidth=2, markersize=8)
+    ax.set_xlabel("Sequence Length", fontsize=11)
+    ax.set_ylabel("Steps to Convergence", fontsize=11)
+    ax.set_title("Convergence Speed", fontsize=12, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plot_path = output_dir / "benchmark_plot.png"
+    plt.savefig(plot_path, dpi=150)
+    logger.info(f"Benchmark plot saved to {plot_path}")
+    
+    logger.info("\n=== BENCHMARK SUMMARY ===")
+    logger.info(f"Device: {device}")
+    for alg in algorithms:
+        alg_data = [r for r in all_results if r["algorithm"] == alg]
+        avg_time = np.mean([r["elapsed_time_seconds"] for r in alg_data])
+        avg_energy = np.mean([r["final_energy"] for r in alg_data])
+        logger.info(f"{alg}: avg_time={avg_time:.2f}s, avg_energy={avg_energy:.4f}")
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
