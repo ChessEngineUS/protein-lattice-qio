@@ -19,8 +19,12 @@ import torch
 import logging
 from tqdm import tqdm
 
-from .lattice import Lattice
-from .energy import EnergyFunction
+try:
+    from .lattice import Lattice
+    from .energy import EnergyFunction
+except ImportError:
+    from lattice import Lattice
+    from energy import EnergyFunction
 
 logger = logging.getLogger(__name__)
 
