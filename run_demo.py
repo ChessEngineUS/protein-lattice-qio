@@ -1,2 +1,129 @@
 #!/usr/bin/env python3
-"""\nMain entry point for the protein lattice folding demo.\n\nThis script:\n1. Generates synthetic HP sequences\n2. Runs multiple optimization algorithms\n3. Produces visualizations and saves results to outputs/\n\nUsage:\n    python run_demo.py\n"""\n\nimport os\nimport sys\nimport logging\nimport json\nfrom pathlib import Path\n\nimport numpy as np\nimport torch\n\n# Add src to path\nsys.path.insert(0, str(Path(__file__).parent / "src"))\n\nfrom lattice import SquareLattice2D, CubicLattice3D\nfrom energy import HPEnergyFunction\nfrom optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer\nfrom visualization import plot_conformation, plot_energy_trajectory, plot_comparison\nfrom utils import set_seed, detect_device, generate_hp_sequence\n\n# Configure logging\nlogging.basicConfig(\n    level=logging.INFO,\n    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'\n)\nlogger = logging.getLogger(__name__)\n\n\ndef main():\n    """Run the complete demo pipeline."""\n    # Create outputs directory\n    output_dir = Path("outputs")\n    output_dir.mkdir(exist_ok=True)\n    \n    # Set random seed for reproducibility\n    set_seed(42)\n    \n    # Detect device (GPU/CPU)\n    device = detect_device()\n    logger.info(f"Using device: {device}")\n    \n    # Generate synthetic HP sequences\n    logger.info("Generating synthetic HP sequences...")\n    sequences = [\n        generate_hp_sequence(20, h_ratio=0.5),\n        generate_hp_sequence(30, h_ratio=0.6),\n        generate_hp_sequence(25, h_ratio=0.55),\n    ]\n    \n    logger.info(f"Generated {len(sequences)} sequences: {sequences}")\n    \n    # Choose a representative sequence for detailed analysis\n    test_sequence = sequences[1]  # 30-residue sequence\n    logger.info(f"Running detailed analysis on sequence: {test_sequence}")\n    \n    # Initialize lattice and energy function\n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    \n    # Initialize optimizers\n    optimizers = {\n        "Greedy": GreedyOptimizer(device=device),\n        "Simulated Annealing": SimulatedAnnealingOptimizer(\n            initial_temp=10.0,\n            final_temp=0.1,\n            steps=5000,\n            device=device\n        ),\n        "Quantum-Inspired": QuantumInspiredOptimizer(\n            initial_temp=10.0,\n            final_temp=0.1,\n            steps=5000,\n            tunnel_rate=0.1,\n            device=device\n        ),\n    }\n    \n    # Run optimizations\n    results = {}\n    for name, optimizer in optimizers.items():\n        logger.info(f"Running {name} optimizer...")\n        coords, energy, trajectory = optimizer.optimize(\n            test_sequence, lattice, energy_fn\n        )\n        results[name] = {\n            "coords": coords,\n            "energy": energy,\n            "trajectory": trajectory\n        }\n        logger.info(f"{name} final energy: {energy:.4f}")\n        \n        # Save conformation plot\n        fig = plot_conformation(coords, test_sequence, title=f"{name} - Energy: {energy:.4f}")\n        fig.savefig(output_dir / f"conformation_{name.replace(' ', '_').lower()}.png", dpi=150)\n        logger.info(f"Saved conformation plot for {name}")\n    \n    # Plot energy trajectories\n    logger.info("Plotting energy trajectories...")\n    fig = plot_energy_trajectory(\n        {name: res["trajectory"] for name, res in results.items()}\n    )\n    fig.savefig(output_dir / "energy_trajectories.png", dpi=150)\n    \n    # Plot comparison\n    logger.info("Plotting algorithm comparison...")\n    fig = plot_comparison(results, sequences)\n    fig.savefig(output_dir / "algorithm_comparison.png", dpi=150)\n    \n    # Save results summary\n    summary = {\n        "sequence": test_sequence,\n        "sequence_length": len(test_sequence),\n        "device": str(device),\n        "algorithms": {\n            name: {\n                "final_energy": float(res["energy"]),\n                "steps": len(res["trajectory"])\n            }\n            for name, res in results.items()\n        }\n    }\n    \n    with open(output_dir / "results_summary.json", "w") as f:\n        json.dump(summary, f, indent=2)\n    \n    logger.info(f"Demo complete! Results saved to {output_dir}")\n    logger.info(f"Best energy: {min(res['energy'] for res in results.values()):.4f}")\n    \n    return 0\n\n\nif __name__ == "__main__":\n    sys.exit(main())\n
+"""Main entry point for the protein lattice folding demo.
+
+This script:
+1. Generates synthetic HP sequences
+2. Runs multiple optimization algorithms
+3. Produces visualizations and saves results to outputs/
+
+Usage:
+    python run_demo.py
+"""
+
+import os
+import sys
+import logging
+import json
+from pathlib import Path
+
+import numpy as np
+import torch
+
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from lattice import SquareLattice2D, CubicLattice3D
+from energy import HPEnergyFunction
+from optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer
+from visualization import plot_conformation, plot_energy_trajectory, plot_comparison
+from utils import set_seed, detect_device, generate_hp_sequence
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def main():
+    """Run the complete demo pipeline."""
+    output_dir = Path("outputs")
+    output_dir.mkdir(exist_ok=True)
+    
+    set_seed(42)
+    
+    device = detect_device()
+    logger.info(f"Using device: {device}")
+    
+    logger.info("Generating synthetic HP sequences...")
+    sequences = [
+        generate_hp_sequence(20, h_ratio=0.5),
+        generate_hp_sequence(30, h_ratio=0.6),
+        generate_hp_sequence(25, h_ratio=0.55),
+    ]
+    
+    logger.info(f"Generated {len(sequences)} sequences: {sequences}")
+    
+    test_sequence = sequences[1]
+    logger.info(f"Running detailed analysis on sequence: {test_sequence}")
+    
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    
+    optimizers = {
+        "Greedy": GreedyOptimizer(device=device),
+        "Simulated Annealing": SimulatedAnnealingOptimizer(
+            initial_temp=10.0,
+            final_temp=0.1,
+            steps=5000,
+            device=device
+        ),
+        "Quantum-Inspired": QuantumInspiredOptimizer(
+            initial_temp=10.0,
+            final_temp=0.1,
+            steps=5000,
+            tunnel_rate=0.1,
+            device=device
+        ),
+    }
+    
+    results = {}
+    for name, optimizer in optimizers.items():
+        logger.info(f"Running {name} optimizer...")
+        coords, energy, trajectory = optimizer.optimize(
+            test_sequence, lattice, energy_fn
+        )
+        results[name] = {
+            "coords": coords,
+            "energy": energy,
+            "trajectory": trajectory
+        }
+        logger.info(f"{name} final energy: {energy:.4f}")
+        
+        fig = plot_conformation(coords, test_sequence, title=f"{name} - Energy: {energy:.4f}")
+        fig.savefig(output_dir / f"conformation_{name.replace(' ', '_').lower()}.png", dpi=150)
+        logger.info(f"Saved conformation plot for {name}")
+    
+    logger.info("Plotting energy trajectories...")
+    fig = plot_energy_trajectory(
+        {name: res["trajectory"] for name, res in results.items()}
+    )
+    fig.savefig(output_dir / "energy_trajectories.png", dpi=150)
+    
+    logger.info("Plotting algorithm comparison...")
+    fig = plot_comparison(results, sequences)
+    fig.savefig(output_dir / "algorithm_comparison.png", dpi=150)
+    
+    summary = {
+        "sequence": test_sequence,
+        "sequence_length": len(test_sequence),
+        "device": str(device),
+        "algorithms": {
+            name: {
+                "final_energy": float(res["energy"]),
+                "steps": len(res["trajectory"])
+            }
+            for name, res in results.items()
+        }
+    }
+    
+    with open(output_dir / "results_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    
+    logger.info(f"Demo complete! Results saved to {output_dir}")
+    logger.info(f"Best energy: {min(res['energy'] for res in results.values()):.4f}")
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
