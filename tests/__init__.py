@@ -1,1 +1,1 @@
-"""\nUnit tests for protein lattice folding toolkit.\n"""\n
+"""Unit tests for protein lattice folding toolkit."""

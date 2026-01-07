@@ -1,1 +1,93 @@
-"""\nUnit tests for optimizers.\n"""\n\nimport numpy as np\nimport pytest\nfrom src.optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer\nfrom src.lattice import SquareLattice2D\nfrom src.energy import HPEnergyFunction\nfrom src.utils import set_seed\n\n\ndef test_greedy_optimizer():\n    """Test greedy optimizer produces valid conformation."""\n    set_seed(42)\n    \n    optimizer = GreedyOptimizer()\n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    sequence = "HPHPH"\n    \n    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)\n    \n    assert coords.shape == (len(sequence), 2)\n    assert lattice.is_valid_conformation(coords)\n    assert isinstance(energy, float)\n    assert len(trajectory) > 0\n\n\ndef test_simulated_annealing_optimizer():\n    """Test simulated annealing optimizer."""\n    set_seed(42)\n    \n    optimizer = SimulatedAnnealingOptimizer(\n        initial_temp=5.0,\n        final_temp=0.1,\n        steps=100,\n        device="cpu"\n    )\n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    sequence = "HPHPH"\n    \n    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)\n    \n    assert coords.shape == (len(sequence), 2)\n    assert lattice.is_valid_conformation(coords)\n    assert isinstance(energy, float)\n    assert len(trajectory) == 101  # initial + 100 steps\n\n\ndef test_quantum_inspired_optimizer():\n    """Test quantum-inspired optimizer."""\n    set_seed(42)\n    \n    optimizer = QuantumInspiredOptimizer(\n        initial_temp=5.0,\n        final_temp=0.1,\n        steps=100,\n        tunnel_rate=0.1,\n        device="cpu"\n    )\n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    sequence = "HPHPH"\n    \n    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)\n    \n    assert coords.shape == (len(sequence), 2)\n    assert lattice.is_valid_conformation(coords)\n    assert isinstance(energy, float)\n    assert len(trajectory) == 101\n\n\ndef test_optimizer_comparison():\n    """Test that different optimizers produce different results."""\n    set_seed(42)\n    \n    lattice = SquareLattice2D()\n    energy_fn = HPEnergyFunction()\n    sequence = "HPHPHPH"\n    \n    greedy = GreedyOptimizer()\n    sa = SimulatedAnnealingOptimizer(steps=50, device="cpu")\n    qi = QuantumInspiredOptimizer(steps=50, device="cpu")\n    \n    _, e_greedy, _ = greedy.optimize(sequence, lattice, energy_fn)\n    \n    set_seed(42)\n    _, e_sa, _ = sa.optimize(sequence, lattice, energy_fn)\n    \n    set_seed(42)\n    _, e_qi, _ = qi.optimize(sequence, lattice, energy_fn)\n    \n    # Energies should be valid\n    assert all(isinstance(e, float) for e in [e_greedy, e_sa, e_qi])\n
+"""Unit tests for optimizers."""
+
+import numpy as np
+import pytest
+from src.optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer
+from src.lattice import SquareLattice2D
+from src.energy import HPEnergyFunction
+from src.utils import set_seed
+
+
+def test_greedy_optimizer():
+    """Test greedy optimizer produces valid conformation."""
+    set_seed(42)
+    
+    optimizer = GreedyOptimizer()
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    sequence = "HPHPH"
+    
+    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)
+    
+    assert coords.shape == (len(sequence), 2)
+    assert lattice.is_valid_conformation(coords)
+    assert isinstance(energy, float)
+    assert len(trajectory) > 0
+
+
+def test_simulated_annealing_optimizer():
+    """Test simulated annealing optimizer."""
+    set_seed(42)
+    
+    optimizer = SimulatedAnnealingOptimizer(
+        initial_temp=5.0,
+        final_temp=0.1,
+        steps=100,
+        device="cpu"
+    )
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    sequence = "HPHPH"
+    
+    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)
+    
+    assert coords.shape == (len(sequence), 2)
+    assert lattice.is_valid_conformation(coords)
+    assert isinstance(energy, float)
+    assert len(trajectory) == 101
+
+
+def test_quantum_inspired_optimizer():
+    """Test quantum-inspired optimizer."""
+    set_seed(42)
+    
+    optimizer = QuantumInspiredOptimizer(
+        initial_temp=5.0,
+        final_temp=0.1,
+        steps=100,
+        tunnel_rate=0.1,
+        device="cpu"
+    )
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    sequence = "HPHPH"
+    
+    coords, energy, trajectory = optimizer.optimize(sequence, lattice, energy_fn)
+    
+    assert coords.shape == (len(sequence), 2)
+    assert lattice.is_valid_conformation(coords)
+    assert isinstance(energy, float)
+    assert len(trajectory) == 101
+
+
+def test_optimizer_comparison():
+    """Test that different optimizers produce different results."""
+    set_seed(42)
+    
+    lattice = SquareLattice2D()
+    energy_fn = HPEnergyFunction()
+    sequence = "HPHPHPH"
+    
+    greedy = GreedyOptimizer()
+    sa = SimulatedAnnealingOptimizer(steps=50, device="cpu")
+    qi = QuantumInspiredOptimizer(steps=50, device="cpu")
+    
+    _, e_greedy, _ = greedy.optimize(sequence, lattice, energy_fn)
+    
+    set_seed(42)
+    _, e_sa, _ = sa.optimize(sequence, lattice, energy_fn)
+    
+    set_seed(42)
+    _, e_qi, _ = qi.optimize(sequence, lattice, energy_fn)
+    
+    assert all(isinstance(e, float) for e in [e_greedy, e_sa, e_qi])

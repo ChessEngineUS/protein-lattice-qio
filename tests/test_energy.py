@@ -1,1 +1,57 @@
-"""\nUnit tests for energy functions.\n"""\n\nimport numpy as np\nimport pytest\nfrom src.energy import HPEnergyFunction\nfrom src.lattice import SquareLattice2D\n\n\ndef test_hp_energy_no_contacts():\n    """Test HP energy with no contacts."""\n    energy_fn = HPEnergyFunction()\n    sequence = "HPHPH"\n    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]])\n    \n    contacts = []\n    energy = energy_fn.calculate(coords, sequence, contacts)\n    \n    assert energy == 0.0\n\n\ndef test_hp_energy_hh_contact():\n    """Test HP energy with H-H contact."""\n    energy_fn = HPEnergyFunction(hh_energy=-1.0)\n    sequence = "HH"\n    coords = np.array([[0, 0], [1, 0]])\n    \n    # This is not a non-local contact (consecutive), so energy should be 0\n    contacts = []\n    energy = energy_fn.calculate(coords, sequence, contacts)\n    assert energy == 0.0\n    \n    # Test with actual non-local H-H contact\n    sequence = "HPPH"\n    coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])\n    contacts = [(0, 3)]  # positions 0 and 3 are both H\n    energy = energy_fn.calculate(coords, sequence, contacts)\n    assert energy == -1.0\n\n\ndef test_hp_energy_hp_contact():\n    """Test HP energy with H-P contact (should be 0)."""\n    energy_fn = HPEnergyFunction()\n    sequence = "HP"\n    coords = np.array([[0, 0], [1, 0]])\n    \n    # Even if contact existed (it doesn't for consecutive), H-P gives 0\n    contacts = [(0, 1)]\n    energy = energy_fn.calculate(coords, sequence, contacts)\n    assert energy == 0.0\n\n\ndef test_hp_energy_multiple_contacts():\n    """Test HP energy with multiple H-H contacts."""\n    energy_fn = HPEnergyFunction(hh_energy=-1.0)\n    sequence = "HPHHPH"\n    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]])\n    \n    # Simulate two H-H contacts\n    contacts = [(0, 2), (2, 5)]  # positions are H-H pairs\n    energy = energy_fn.calculate(coords, sequence, contacts)\n    assert energy == -2.0\n
+"""Unit tests for energy functions."""
+
+import numpy as np
+import pytest
+from src.energy import HPEnergyFunction
+from src.lattice import SquareLattice2D
+
+
+def test_hp_energy_no_contacts():
+    """Test HP energy with no contacts."""
+    energy_fn = HPEnergyFunction()
+    sequence = "HPHPH"
+    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]])
+    
+    contacts = []
+    energy = energy_fn.calculate(coords, sequence, contacts)
+    
+    assert energy == 0.0
+
+
+def test_hp_energy_hh_contact():
+    """Test HP energy with H-H contact."""
+    energy_fn = HPEnergyFunction(hh_energy=-1.0)
+    sequence = "HH"
+    coords = np.array([[0, 0], [1, 0]])
+    
+    contacts = []
+    energy = energy_fn.calculate(coords, sequence, contacts)
+    assert energy == 0.0
+    
+    sequence = "HPPH"
+    coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+    contacts = [(0, 3)]
+    energy = energy_fn.calculate(coords, sequence, contacts)
+    assert energy == -1.0
+
+
+def test_hp_energy_hp_contact():
+    """Test HP energy with H-P contact (should be 0)."""
+    energy_fn = HPEnergyFunction()
+    sequence = "HP"
+    coords = np.array([[0, 0], [1, 0]])
+    
+    contacts = [(0, 1)]
+    energy = energy_fn.calculate(coords, sequence, contacts)
+    assert energy == 0.0
+
+
+def test_hp_energy_multiple_contacts():
+    """Test HP energy with multiple H-H contacts."""
+    energy_fn = HPEnergyFunction(hh_energy=-1.0)
+    sequence = "HPHHPH"
+    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]])
+    
+    contacts = [(0, 2), (2, 5)]
+    energy = energy_fn.calculate(coords, sequence, contacts)
+    assert energy == -2.0

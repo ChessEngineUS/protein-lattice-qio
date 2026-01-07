@@ -1,1 +1,65 @@
-"""\nUnit tests for lattice models.\n"""\n\nimport numpy as np\nimport pytest\nfrom src.lattice import SquareLattice2D, CubicLattice3D\n\n\ndef test_square_lattice_dimensions():\n    """Test that 2D lattice reports correct dimensions."""\n    lattice = SquareLattice2D()\n    assert lattice.get_dimensions() == 2\n\n\ndef test_square_lattice_neighbors():\n    """Test neighbor generation on 2D lattice."""\n    lattice = SquareLattice2D()\n    neighbors = lattice.get_neighbors((0, 0))\n    \n    assert len(neighbors) == 4\n    assert (1, 0) in neighbors\n    assert (-1, 0) in neighbors\n    assert (0, 1) in neighbors\n    assert (0, -1) in neighbors\n\n\ndef test_cubic_lattice_dimensions():\n    """Test that 3D lattice reports correct dimensions."""\n    lattice = CubicLattice3D()\n    assert lattice.get_dimensions() == 3\n\n\ndef test_cubic_lattice_neighbors():\n    """Test neighbor generation on 3D lattice."""\n    lattice = CubicLattice3D()\n    neighbors = lattice.get_neighbors((0, 0, 0))\n    \n    assert len(neighbors) == 6\n    assert (1, 0, 0) in neighbors\n    assert (-1, 0, 0) in neighbors\n\n\ndef test_valid_conformation():\n    """Test validation of self-avoiding conformation."""\n    lattice = SquareLattice2D()\n    \n    # Valid conformation (no duplicates)\n    valid_coords = np.array([[0, 0], [1, 0], [1, 1], [2, 1]])\n    assert lattice.is_valid_conformation(valid_coords)\n    \n    # Invalid conformation (duplicate at (1, 0))\n    invalid_coords = np.array([[0, 0], [1, 0], [1, 1], [1, 0]])\n    assert not lattice.is_valid_conformation(invalid_coords)\n\n\ndef test_calculate_contacts():\n    """Test contact calculation."""\n    lattice = SquareLattice2D()\n    sequence = "HPHPH"\n    \n    # Linear conformation (no contacts)\n    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]])\n    contacts = lattice.calculate_contacts(coords, sequence)\n    assert len(contacts) == 0\n    \n    # Folded conformation (one contact between positions 0 and 3)\n    coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 2]])\n    contacts = lattice.calculate_contacts(coords, sequence)\n    assert len(contacts) >= 1\n    assert (0, 3) in contacts or (1, 3) in contacts\n
+"""Unit tests for lattice models."""
+
+import numpy as np
+import pytest
+from src.lattice import SquareLattice2D, CubicLattice3D
+
+
+def test_square_lattice_dimensions():
+    """Test that 2D lattice reports correct dimensions."""
+    lattice = SquareLattice2D()
+    assert lattice.get_dimensions() == 2
+
+
+def test_square_lattice_neighbors():
+    """Test neighbor generation on 2D lattice."""
+    lattice = SquareLattice2D()
+    neighbors = lattice.get_neighbors((0, 0))
+    
+    assert len(neighbors) == 4
+    assert (1, 0) in neighbors
+    assert (-1, 0) in neighbors
+    assert (0, 1) in neighbors
+    assert (0, -1) in neighbors
+
+
+def test_cubic_lattice_dimensions():
+    """Test that 3D lattice reports correct dimensions."""
+    lattice = CubicLattice3D()
+    assert lattice.get_dimensions() == 3
+
+
+def test_cubic_lattice_neighbors():
+    """Test neighbor generation on 3D lattice."""
+    lattice = CubicLattice3D()
+    neighbors = lattice.get_neighbors((0, 0, 0))
+    
+    assert len(neighbors) == 6
+    assert (1, 0, 0) in neighbors
+    assert (-1, 0, 0) in neighbors
+
+
+def test_valid_conformation():
+    """Test validation of self-avoiding conformation."""
+    lattice = SquareLattice2D()
+    
+    valid_coords = np.array([[0, 0], [1, 0], [1, 1], [2, 1]])
+    assert lattice.is_valid_conformation(valid_coords)
+    
+    invalid_coords = np.array([[0, 0], [1, 0], [1, 1], [1, 0]])
+    assert not lattice.is_valid_conformation(invalid_coords)
+
+
+def test_calculate_contacts():
+    """Test contact calculation."""
+    lattice = SquareLattice2D()
+    sequence = "HPHPH"
+    
+    coords = np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]])
+    contacts = lattice.calculate_contacts(coords, sequence)
+    assert len(contacts) == 0
+    
+    coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 2]])
+    contacts = lattice.calculate_contacts(coords, sequence)
+    assert len(contacts) >= 1
+    assert (0, 3) in contacts or (1, 3) in contacts
