@@ -1,5 +1,4 @@
-"""
-Visualization utilities for protein folding simulations.
+"""Visualization utilities for protein folding simulations.
 
 Provides plotting functions for conformations, energy landscapes, and
 algorithm comparisons.
@@ -12,8 +11,7 @@ from typing import Dict, List
 
 
 def plot_conformation(coords: np.ndarray, sequence: str, title: str = "Protein Conformation") -> plt.Figure:
-    """
-    Plot a protein conformation on a lattice.
+    """Plot a protein conformation on a lattice.
     
     Args:
         coords: Array of shape (N, D) with coordinates
@@ -70,8 +68,7 @@ def plot_conformation(coords: np.ndarray, sequence: str, title: str = "Protein C
 
 
 def plot_energy_trajectory(trajectories: Dict[str, List[float]]) -> plt.Figure:
-    """
-    Plot energy trajectories for multiple algorithms.
+    """Plot energy trajectories for multiple algorithms.
     
     Args:
         trajectories: Dict mapping algorithm name to energy trajectory
@@ -95,8 +92,7 @@ def plot_energy_trajectory(trajectories: Dict[str, List[float]]) -> plt.Figure:
 
 
 def plot_comparison(results: Dict, sequences: List[str]) -> plt.Figure:
-    """
-    Plot comparison of algorithm performance.
+    """Plot comparison of algorithm performance.
     
     Args:
         results: Dict mapping algorithm name to result dict
