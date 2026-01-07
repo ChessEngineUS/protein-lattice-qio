@@ -1,5 +1,4 @@
-"""
-Optimization algorithms for protein lattice folding.
+"""Optimization algorithms for protein lattice folding.
 
 Implements:
 - Greedy search baseline
@@ -8,9 +7,9 @@ Implements:
 
 References:
 - Kirkpatrick et al. (1983), DOI: 10.1126/science.220.4598.671
-  "Optimization by simulated annealing"
+  Optimization by simulated annealing
 - Kadowaki & Nishimori (1998), DOI: 10.1103/PhysRevE.58.5355
-  "Quantum annealing in the transverse Ising model"
+  Quantum annealing in the transverse Ising model
 """
 
 from abc import ABC, abstractmethod
@@ -36,8 +35,7 @@ class Optimizer(ABC):
     @abstractmethod
     def optimize(self, sequence: str, lattice: Lattice, 
                 energy_fn: EnergyFunction) -> Tuple[np.ndarray, float, List[float]]:
-        """
-        Optimize protein conformation.
+        """Optimize protein conformation.
         
         Args:
             sequence: Protein sequence string (e.g., "HPHPPHHPHH")
@@ -52,8 +50,7 @@ class Optimizer(ABC):
         pass
     
     def _initialize_conformation(self, sequence: str, lattice: Lattice) -> np.ndarray:
-        """
-        Initialize a random self-avoiding conformation.
+        """Initialize a random self-avoiding conformation.
         
         Uses a self-avoiding random walk on the lattice.
         """
@@ -68,7 +65,6 @@ class Optimizer(ABC):
             available = [n for n in neighbors if tuple(n) not in occupied]
             
             if not available:
-                # Backtrack if stuck
                 occupied.remove(tuple(coords[i-1]))
                 if i > 1:
                     i -= 1
@@ -82,8 +78,7 @@ class Optimizer(ABC):
 
 
 class GreedyOptimizer(Optimizer):
-    """
-    Greedy search baseline optimizer.
+    """Greedy search baseline optimizer.
     
     Builds conformation step-by-step, choosing the move that minimizes
     immediate energy at each step.
@@ -104,10 +99,8 @@ class GreedyOptimizer(Optimizer):
             available = [n for n in neighbors if tuple(n) not in occupied]
             
             if not available:
-                # Random fallback if stuck
                 available = lattice.get_neighbors(tuple(coords[i-1]))
             
-            # Evaluate energy for each candidate position
             best_energy = float('inf')
             best_coord = available[0]
             
@@ -124,7 +117,6 @@ class GreedyOptimizer(Optimizer):
             occupied.add(tuple(best_coord))
             trajectory.append(best_energy)
         
-        # Calculate final energy
         contacts = lattice.calculate_contacts(coords, sequence)
         final_energy = energy_fn.calculate(coords, sequence, contacts)
         
@@ -132,8 +124,7 @@ class GreedyOptimizer(Optimizer):
 
 
 class SimulatedAnnealingOptimizer(Optimizer):
-    """
-    Simulated annealing optimizer.
+    """Simulated annealing optimizer.
     
     Classical optimization inspired by metallurgical annealing process.
     
@@ -144,8 +135,7 @@ class SimulatedAnnealingOptimizer(Optimizer):
     
     def __init__(self, initial_temp: float = 10.0, final_temp: float = 0.1,
                  steps: int = 5000, device: str = "cpu"):
-        """
-        Initialize simulated annealing optimizer.
+        """Initialize simulated annealing optimizer.
         
         Args:
             initial_temp: Starting temperature
@@ -161,7 +151,6 @@ class SimulatedAnnealingOptimizer(Optimizer):
     def optimize(self, sequence: str, lattice: Lattice, 
                 energy_fn: EnergyFunction) -> Tuple[np.ndarray, float, List[float]]:
         """Optimize using simulated annealing."""
-        # Initialize
         current_coords = self._initialize_conformation(sequence, lattice)
         contacts = lattice.calculate_contacts(current_coords, sequence)
         current_energy = energy_fn.calculate(current_coords, sequence, contacts)
@@ -171,15 +160,13 @@ class SimulatedAnnealingOptimizer(Optimizer):
         
         trajectory = [current_energy]
         
-        # Annealing schedule
         temperatures = np.linspace(self.initial_temp, self.final_temp, self.steps)
         
-        for step in tqdm(range(self.steps), desc="Simulated Annealing"):
+        for step in tqdm(range(self.steps), desc="Simulated Annealing", leave=False):
             temp = temperatures[step]
             
-            # Generate neighbor by randomly moving one residue
             candidate_coords = current_coords.copy()
-            move_idx = np.random.randint(1, len(sequence))  # Don't move first residue
+            move_idx = np.random.randint(1, len(sequence))
             
             neighbors = lattice.get_neighbors(tuple(current_coords[move_idx - 1]))
             available = [n for n in neighbors if tuple(n) not in set(map(tuple, current_coords))]
@@ -187,12 +174,10 @@ class SimulatedAnnealingOptimizer(Optimizer):
             if available:
                 candidate_coords[move_idx] = available[np.random.randint(len(available))]
                 
-                # Calculate energy
                 if lattice.is_valid_conformation(candidate_coords):
                     contacts = lattice.calculate_contacts(candidate_coords, sequence)
                     candidate_energy = energy_fn.calculate(candidate_coords, sequence, contacts)
                     
-                    # Metropolis criterion
                     delta_e = candidate_energy - current_energy
                     if delta_e < 0 or np.random.random() < np.exp(-delta_e / temp):
                         current_coords = candidate_coords
@@ -208,8 +193,7 @@ class SimulatedAnnealingOptimizer(Optimizer):
 
 
 class QuantumInspiredOptimizer(Optimizer):
-    """
-    Quantum-inspired annealing optimizer with tunneling.
+    """Quantum-inspired annealing optimizer with tunneling.
     
     Extends classical simulated annealing with quantum-inspired tunneling
     that allows escaping local minima through non-local moves.
@@ -221,8 +205,7 @@ class QuantumInspiredOptimizer(Optimizer):
     
     def __init__(self, initial_temp: float = 10.0, final_temp: float = 0.1,
                  steps: int = 5000, tunnel_rate: float = 0.1, device: str = "cpu"):
-        """
-        Initialize quantum-inspired optimizer.
+        """Initialize quantum-inspired optimizer.
         
         Args:
             initial_temp: Starting temperature
@@ -240,7 +223,6 @@ class QuantumInspiredOptimizer(Optimizer):
     def optimize(self, sequence: str, lattice: Lattice, 
                 energy_fn: EnergyFunction) -> Tuple[np.ndarray, float, List[float]]:
         """Optimize using quantum-inspired annealing."""
-        # Initialize
         current_coords = self._initialize_conformation(sequence, lattice)
         contacts = lattice.calculate_contacts(current_coords, sequence)
         current_energy = energy_fn.calculate(current_coords, sequence, contacts)
@@ -250,27 +232,22 @@ class QuantumInspiredOptimizer(Optimizer):
         
         trajectory = [current_energy]
         
-        # Annealing schedule
         temperatures = np.linspace(self.initial_temp, self.final_temp, self.steps)
         
-        for step in tqdm(range(self.steps), desc="Quantum-Inspired Annealing"):
+        for step in tqdm(range(self.steps), desc="Quantum-Inspired Annealing", leave=False):
             temp = temperatures[step]
             
-            # Quantum tunneling: occasionally make large non-local moves
             if np.random.random() < self.tunnel_rate:
-                # Tunneling move: rebuild a segment
                 segment_start = np.random.randint(1, len(sequence) - 1)
                 segment_end = min(segment_start + np.random.randint(2, 5), len(sequence))
                 
                 candidate_coords = current_coords.copy()
-                # Rebuild segment from segment_start
                 for i in range(segment_start, segment_end):
                     neighbors = lattice.get_neighbors(tuple(candidate_coords[i-1]))
                     available = [n for n in neighbors if tuple(n) not in set(map(tuple, candidate_coords[:i]))]
                     if available:
                         candidate_coords[i] = available[np.random.randint(len(available))]
             else:
-                # Standard local move
                 candidate_coords = current_coords.copy()
                 move_idx = np.random.randint(1, len(sequence))
                 
@@ -280,12 +257,10 @@ class QuantumInspiredOptimizer(Optimizer):
                 if available:
                     candidate_coords[move_idx] = available[np.random.randint(len(available))]
             
-            # Calculate energy and accept/reject
             if lattice.is_valid_conformation(candidate_coords):
                 contacts = lattice.calculate_contacts(candidate_coords, sequence)
                 candidate_energy = energy_fn.calculate(candidate_coords, sequence, contacts)
                 
-                # Metropolis criterion
                 delta_e = candidate_energy - current_energy
                 if delta_e < 0 or np.random.random() < np.exp(-delta_e / temp):
                     current_coords = candidate_coords
