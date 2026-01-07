@@ -1,1 +1,78 @@
-"""\nUtility functions for protein lattice folding simulations.\n\nProvides helper functions for random seed setting, device detection,\nand sequence generation.\n"""\n\nimport random\nimport numpy as np\nimport torch\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\ndef set_seed(seed: int = 42):\n    """\n    Set random seeds for reproducibility.\n    \n    Args:\n        seed: Random seed value\n    """\n    random.seed(seed)\n    np.random.seed(seed)\n    torch.manual_seed(seed)\n    if torch.cuda.is_available():\n        torch.cuda.manual_seed_all(seed)\n    logger.info(f"Random seed set to {seed}")\n\n\ndef detect_device() -> str:\n    """\n    Detect available compute device (GPU/CPU).\n    \n    Returns:\n        Device string ('cuda' or 'cpu')\n    """\n    if torch.cuda.is_available():\n        device = 'cuda'\n        logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")\n        logger.info(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")\n    else:\n        device = 'cpu'\n        logger.info("No GPU detected, using CPU")\n    \n    return device\n\n\ndef generate_hp_sequence(length: int, h_ratio: float = 0.5, seed: int = None) -> str:\n    """\n    Generate a random HP sequence.\n    \n    Args:\n        length: Sequence length\n        h_ratio: Ratio of hydrophobic (H) residues\n        seed: Optional random seed\n        \n    Returns:\n        HP sequence string (e.g., \"HPHPPHHPHH\")\n    """\n    if seed is not None:\n        np.random.seed(seed)\n    \n    n_h = int(length * h_ratio)\n    n_p = length - n_h\n    \n    residues = ['H'] * n_h + ['P'] * n_p\n    np.random.shuffle(residues)\n    \n    return ''.join(residues)\n\n\ndef calculate_sequence_hydrophobicity(sequence: str) -> float:\n    """\n    Calculate the hydrophobicity ratio of a sequence.\n    \n    Args:\n        sequence: HP sequence string\n        \n    Returns:\n        Ratio of H residues (0.0 to 1.0)\n    """\n    return sequence.count('H') / len(sequence)\n
+"""Utility functions for protein lattice folding simulations.
+
+Provides helper functions for random seed setting, device detection,
+and sequence generation.
+"""
+
+import random
+import numpy as np
+import torch
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def set_seed(seed: int = 42):
+    """Set random seeds for reproducibility.
+    
+    Args:
+        seed: Random seed value
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    logger.info(f"Random seed set to {seed}")
+
+
+def detect_device() -> str:
+    """Detect available compute device (GPU/CPU).
+    
+    Returns:
+        Device string ('cuda' or 'cpu')
+    """
+    if torch.cuda.is_available():
+        device = 'cuda'
+        logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+        logger.info(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    else:
+        device = 'cpu'
+        logger.info("No GPU detected, using CPU")
+    
+    return device
+
+
+def generate_hp_sequence(length: int, h_ratio: float = 0.5, seed: int = None) -> str:
+    """Generate a random HP sequence.
+    
+    Args:
+        length: Sequence length
+        h_ratio: Ratio of hydrophobic (H) residues
+        seed: Optional random seed
+        
+    Returns:
+        HP sequence string (e.g., "HPHPPHHPHH")
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    
+    n_h = int(length * h_ratio)
+    n_p = length - n_h
+    
+    residues = ['H'] * n_h + ['P'] * n_p
+    np.random.shuffle(residues)
+    
+    return ''.join(residues)
+
+
+def calculate_sequence_hydrophobicity(sequence: str) -> float:
+    """Calculate the hydrophobicity ratio of a sequence.
+    
+    Args:
+        sequence: HP sequence string
+        
+    Returns:
+        Ratio of H residues (0.0 to 1.0)
+    """
+    return sequence.count('H') / len(sequence)
