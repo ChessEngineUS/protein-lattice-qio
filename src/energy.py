@@ -1,1 +1,87 @@
-"""\nEnergy function implementations for protein folding simulations.\n\nImplements the HP (Hydrophobic-Polar) model and extensible energy framework.\n\nReferences:\n- Lau & Dill (1989), DOI: 10.1073/pnas.86.6.2050\n  \"A lattice statistical mechanics model of the conformational and sequence spaces of proteins\"\n"""\n\nfrom abc import ABC, abstractmethod\nfrom typing import List, Tuple\nimport numpy as np\nimport torch\n\n\nclass EnergyFunction(ABC):\n    """Abstract base class for energy functions."""\n    \n    @abstractmethod\n    def calculate(self, coords: np.ndarray, sequence: str, contacts: List[Tuple[int, int]]) -> float:\n        """\n        Calculate the energy of a conformation.\n        \n        Args:\n            coords: Array of shape (N, D) with conformation coordinates\n            sequence: Protein sequence string\n            contacts: List of (i, j) contact pairs\n            \n        Returns:\n            Energy value (lower is better)\n        """\n        pass\n\n\nclass HPEnergyFunction(EnergyFunction):\n    """\n    HP (Hydrophobic-Polar) model energy function.\n    \n    Energy is based on hydrophobic contacts:\n    - H-H contact: -1 (favorable)\n    - H-P contact: 0\n    - P-P contact: 0\n    \n    The goal is to maximize H-H contacts (minimize energy).\n    \n    Reference:\n    Lau, K. F., & Dill, K. A. (1989). PNAS, 86(6), 2050-2054.\n    DOI: 10.1073/pnas.86.6.2050\n    """\n    \n    def __init__(self, hh_energy: float = -1.0):\n        """\n        Initialize HP energy function.\n        \n        Args:\n            hh_energy: Energy value for H-H contacts (typically negative)\n        """\n        self.hh_energy = hh_energy\n    \n    def calculate(self, coords: np.ndarray, sequence: str, contacts: List[Tuple[int, int]]) -> float:\n        """Calculate HP model energy."""\n        energy = 0.0\n        \n        for i, j in contacts:\n            if sequence[i] == 'H' and sequence[j] == 'H':\n                energy += self.hh_energy\n        \n        return energy\n    \n    def calculate_batch(self, coords_batch: torch.Tensor, sequence: str, \n                       lattice) -> torch.Tensor:\n        """\n        Calculate energies for a batch of conformations (GPU-accelerated).\n        \n        Args:\n            coords_batch: Tensor of shape (B, N, D) where B is batch size\n            sequence: Protein sequence string\n            lattice: Lattice object for contact calculation\n            \n        Returns:\n            Tensor of shape (B,) with energy values\n        """\n        batch_size = coords_batch.shape[0]\n        energies = torch.zeros(batch_size, device=coords_batch.device)\n        \n        # Convert to numpy for contact calculation (can be optimized)\n        for b in range(batch_size):\n            coords_np = coords_batch[b].cpu().numpy()\n            contacts = lattice.calculate_contacts(coords_np, sequence)\n            energies[b] = self.calculate(coords_np, sequence, contacts)\n        \n        return energies\n
+"""Energy function implementations for protein folding simulations.
+
+Implements the HP (Hydrophobic-Polar) model and extensible energy framework.
+
+References:
+- Lau & Dill (1989), DOI: 10.1073/pnas.86.6.2050
+  A lattice statistical mechanics model of the conformational and sequence spaces of proteins
+"""
+
+from abc import ABC, abstractmethod
+from typing import List, Tuple
+import numpy as np
+import torch
+
+
+class EnergyFunction(ABC):
+    """Abstract base class for energy functions."""
+    
+    @abstractmethod
+    def calculate(self, coords: np.ndarray, sequence: str, contacts: List[Tuple[int, int]]) -> float:
+        """Calculate the energy of a conformation.
+        
+        Args:
+            coords: Array of shape (N, D) with conformation coordinates
+            sequence: Protein sequence string
+            contacts: List of (i, j) contact pairs
+            
+        Returns:
+            Energy value (lower is better)
+        """
+        pass
+
+
+class HPEnergyFunction(EnergyFunction):
+    """HP (Hydrophobic-Polar) model energy function.
+    
+    Energy is based on hydrophobic contacts:
+    - H-H contact: -1 (favorable)
+    - H-P contact: 0
+    - P-P contact: 0
+    
+    The goal is to maximize H-H contacts (minimize energy).
+    
+    Reference:
+    Lau, K. F., & Dill, K. A. (1989). PNAS, 86(6), 2050-2054.
+    DOI: 10.1073/pnas.86.6.2050
+    """
+    
+    def __init__(self, hh_energy: float = -1.0):
+        """Initialize HP energy function.
+        
+        Args:
+            hh_energy: Energy value for H-H contacts (typically negative)
+        """
+        self.hh_energy = hh_energy
+    
+    def calculate(self, coords: np.ndarray, sequence: str, contacts: List[Tuple[int, int]]) -> float:
+        """Calculate HP model energy."""
+        energy = 0.0
+        
+        for i, j in contacts:
+            if sequence[i] == 'H' and sequence[j] == 'H':
+                energy += self.hh_energy
+        
+        return energy
+    
+    def calculate_batch(self, coords_batch: torch.Tensor, sequence: str, 
+                       lattice) -> torch.Tensor:
+        """Calculate energies for a batch of conformations (GPU-accelerated).
+        
+        Args:
+            coords_batch: Tensor of shape (B, N, D) where B is batch size
+            sequence: Protein sequence string
+            lattice: Lattice object for contact calculation
+            
+        Returns:
+            Tensor of shape (B,) with energy values
+        """
+        batch_size = coords_batch.shape[0]
+        energies = torch.zeros(batch_size, device=coords_batch.device)
+        
+        for b in range(batch_size):
+            coords_np = coords_batch[b].cpu().numpy()
+            contacts = lattice.calculate_contacts(coords_np, sequence)
+            energies[b] = self.calculate(coords_np, sequence, contacts)
+        
+        return energies

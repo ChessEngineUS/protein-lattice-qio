@@ -1,1 +1,21 @@
-"""\nProtein Lattice Folding with Quantum-Inspired Optimization.\n\nA toolkit for simulating protein folding on lattice models using\nquantum-inspired optimization algorithms.\n"""\n\n__version__ = "1.0.0"\n__author__ = "ChessEngineUS"\n\nfrom .lattice import SquareLattice2D, CubicLattice3D\nfrom .energy import HPEnergyFunction\nfrom .optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer\n\n__all__ = [\n    "SquareLattice2D",\n    "CubicLattice3D",\n    "HPEnergyFunction",\n    "GreedyOptimizer",\n    "SimulatedAnnealingOptimizer",\n    "QuantumInspiredOptimizer",\n]\n
+"""Protein Lattice Folding with Quantum-Inspired Optimization.
+
+A toolkit for simulating protein folding on lattice models using
+quantum-inspired optimization algorithms.
+"""
+
+__version__ = "1.0.0"
+__author__ = "ChessEngineUS"
+
+from .lattice import SquareLattice2D, CubicLattice3D
+from .energy import HPEnergyFunction
+from .optimizer import GreedyOptimizer, SimulatedAnnealingOptimizer, QuantumInspiredOptimizer
+
+__all__ = [
+    "SquareLattice2D",
+    "CubicLattice3D",
+    "HPEnergyFunction",
+    "GreedyOptimizer",
+    "SimulatedAnnealingOptimizer",
+    "QuantumInspiredOptimizer",
+]
