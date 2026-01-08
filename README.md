@@ -104,7 +104,6 @@ Results saved to:
 
 ### Running Tests
 ```bash
-pip install pytest  # if not already installed
 pytest tests/ -v
 ```
 
